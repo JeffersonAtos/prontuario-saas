@@ -1,9 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { 
+  createPatient, 
+  createAppointment, 
+  createAccessToken,
+  getAppointmentsByClinic,
+  getPatientsByClinic
+} from '@/lib/supabase'
 
 export default function RecepcaoPage() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [pacientes, setPacientes] = useState<any[]>([])
+  const [consultas, setConsultas] = useState<any[]>([])
+  
+  // Dados do formulário
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -11,35 +23,93 @@ export default function RecepcaoPage() {
   const [dataConsulta, setDataConsulta] = useState('')
   const [horaConsulta, setHoraConsulta] = useState('')
 
-  // Dados simulados
-  const pacientes = [
-    {
-      id: '1',
-      nome: 'João Silva',
-      telefone: '(11) 98765-4321',
-      proximaConsulta: '15/10/2025 14:00',
-      status: 'link_enviado',
-      preenchido: true,
-    },
-    {
-      id: '2',
-      nome: 'Maria Santos',
-      telefone: '(11) 98765-1234',
-      proximaConsulta: '16/10/2025 10:00',
-      status: 'agendado',
-      preenchido: false,
-    },
-  ]
+  // IDs fixos para o MVP (depois virá do contexto de autenticação)
+  const CLINIC_ID = '00000000-0000-0000-0000-000000000001' // Simulado
+  const ORG_ID = '00000000-0000-0000-0000-000000000001' // Simulado
+  const PROFESSIONAL_ID = '00000000-0000-0000-0000-000000000001' // Simulado
 
-  const handleCadastrar = () => {
-    alert('Paciente cadastrado e link enviado!')
-    setMostrarFormulario(false)
-    // TODO: Integrar com Supabase
+  // Carregar dados ao iniciar
+  useEffect(() => {
+    carregarDados()
+  }, [])
+
+  const carregarDados = async () => {
+    try {
+      const [pacs, cons] = await Promise.all([
+        getPatientsByClinic(CLINIC_ID),
+        getAppointmentsByClinic(CLINIC_ID)
+      ])
+      setPacientes(pacs || [])
+      setConsultas(cons || [])
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+    }
   }
 
-  const enviarLink = (pacienteId: string) => {
-    alert('Link enviado para o paciente!')
-    // TODO: Integrar envio de link/OTP
+  const handleCadastrar = async () => {
+    if (!nome || !telefone || !dataNascimento || !dataConsulta || !horaConsulta) {
+      alert('Preencha todos os campos obrigatórios!')
+      return
+    }
+
+    setLoading(true)
+    try {
+      // 1. Criar paciente
+      const paciente = await createPatient({
+        clinic_id: CLINIC_ID,
+        org_id: ORG_ID,
+        name: nome,
+        birth_date: dataNascimento,
+        contact_phone: telefone,
+        contact_email: email || undefined
+      })
+
+      // 2. Criar consulta
+      const datetime = `${dataConsulta}T${horaConsulta}:00`
+      const consulta = await createAppointment({
+        org_id: ORG_ID,
+        clinic_id: CLINIC_ID,
+        patient_id: paciente.id,
+        professional_id: PROFESSIONAL_ID,
+        datetime
+      })
+
+      // 3. Gerar token de acesso
+      const { token } = await createAccessToken(consulta.id)
+      
+      // 4. Gerar link (por enquanto simples, depois integramos WhatsApp)
+      const link = `${window.location.origin}/paciente?token=${token}`
+      
+      alert(`✅ Paciente cadastrado!\n\nLink de acesso:\n${link}\n\n(Copie e envie para o paciente)`)
+      
+      // Limpar formulário
+      setNome('')
+      setEmail('')
+      setTelefone('')
+      setDataNascimento('')
+      setDataConsulta('')
+      setHoraConsulta('')
+      setMostrarFormulario(false)
+      
+      // Recarregar lista
+      await carregarDados()
+      
+    } catch (error: any) {
+      console.error('Erro ao cadastrar:', error)
+      alert('Erro ao cadastrar: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatarData = (datetime: string) => {
+    return new Date(datetime).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   return (
@@ -52,7 +122,10 @@ export default function RecepcaoPage() {
               <h1 className="text-2xl font-bold text-gray-900">Recepção</h1>
               <p className="text-sm text-gray-600">Gestão de pacientes e consultas</p>
             </div>
-            <button className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900">
+            <button 
+              onClick={() => window.location.href = '/'}
+              className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
+            >
               Sair
             </button>
           </div>
@@ -155,94 +228,86 @@ export default function RecepcaoPage() {
               <button
                 onClick={() => setMostrarFormulario(false)}
                 className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                disabled={loading}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCadastrar}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                disabled={loading}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                Cadastrar e Enviar Link
+                {loading ? 'Cadastrando...' : 'Cadastrar e Gerar Link'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Lista de Pacientes */}
+        {/* Lista de Consultas */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Pacientes Agendados</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Consultas Agendadas ({consultas.length})
+            </h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Telefone
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Próxima Consulta
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Formulário
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {pacientes.map((paciente) => (
-                  <tr key={paciente.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{paciente.nome}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{paciente.telefone}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{paciente.proximaConsulta}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        paciente.status === 'link_enviado' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {paciente.status === 'link_enviado' ? 'Link Enviado' : 'Agendado'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {paciente.preenchido ? (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          ✓ Concluído
-                        </span>
-                      ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                          Pendente
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {!paciente.preenchido && (
-                        <button
-                          onClick={() => enviarLink(paciente.id)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          Reenviar Link
-                        </button>
-                      )}
-                    </td>
+            {consultas.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                Nenhuma consulta agendada ainda.
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Paciente
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Telefone
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Data/Hora
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {consultas.map((consulta) => (
+                    <tr key={consulta.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {consulta.patients?.name || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {consulta.patients?.contact_phone || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {formatarData(consulta.datetime)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          consulta.status === 'completed' 
+                            ? 'bg-green-100 text-green-800'
+                            : consulta.status === 'cancelled'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {consulta.status === 'scheduled' ? 'Agendado' : 
+                           consulta.status === 'completed' ? 'Concluído' : 'Cancelado'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </main>
