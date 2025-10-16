@@ -1,62 +1,144 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { 
+  getSubmissionsByPatient, 
+  getPatientById,
+  getAlertsBySubmission,
+  createClinicalNote
+} from '@/lib/supabase'
 
 export default function PacienteDetalhePage({ params }: { params: { id: string } }) {
+  const [paciente, setPaciente] = useState<any>(null)
+  const [submissoes, setSubmissoes] = useState<any[]>([])
+  const [submissaoAtual, setSubmissaoAtual] = useState<any>(null)
+  const [alertas, setAlertas] = useState<any[]>([])
   const [notaClinica, setNotaClinica] = useState('')
-  const [modoComparacao, setModoComparacao] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [salvandoNota, setSalvandoNota] = useState(false)
 
-  // Dados simulados (depois virá do Supabase)
-  const paciente = {
-    id: params.id,
-    nome: 'João Silva',
-    idade: 42,
-    peso: 85,
-    altura: 1.75,
-    dataConsulta: '15/10/2025',
+  useEffect(() => {
+    carregarDados()
+  }, [params.id])
+
+  const carregarDados = async () => {
+    try {
+      // Carregar paciente
+      const pac = await getPatientById(params.id)
+      setPaciente(pac)
+
+      // Carregar submissões
+      const subs = await getSubmissionsByPatient(params.id)
+      setSubmissoes(subs || [])
+
+      if (subs && subs.length > 0) {
+        // Carregar submissão mais recente
+        const ultima = subs[0]
+        setSubmissaoAtual(ultima)
+
+        // Carregar alertas
+        const alts = await getAlertsBySubmission(ultima.id)
+        setAlertas(alts || [])
+      }
+
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+      alert('Erro ao carregar dados do paciente')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const scores = {
-    sono: 3,
-    estresse: 9,
-    atividadeFisica: 7,
-    alimentacao: 8,
-    intestino: 4,
-    energia: 5,
-    hormonios: 6,
+  const salvarNota = async () => {
+    if (!notaClinica.trim()) {
+      alert('Digite uma nota clínica antes de salvar')
+      return
+    }
+
+    setSalvandoNota(true)
+    try {
+      await createClinicalNote({
+        org_id: submissaoAtual.org_id,
+        clinic_id: submissaoAtual.clinic_id,
+        patient_id: params.id,
+        appointment_id: submissaoAtual.appointment_id,
+        author_id: '00000000-0000-0000-0000-000000000001', // Simulado
+        content_text: notaClinica
+      })
+
+      alert('✅ Nota clínica salva com sucesso!')
+      setNotaClinica('')
+
+    } catch (error: any) {
+      console.error('Erro ao salvar nota:', error)
+      alert('Erro ao salvar nota: ' + error.message)
+    } finally {
+      setSalvandoNota(false)
+    }
   }
 
-  const alertas = [
-    {
-      tipo: 'critical',
-      pilar: 'Sono',
-      score: 3,
-      motivo: 'Sono crítico: dorme <6h + acorda 3-4x/noite + usa medicação',
-    },
-    {
-      tipo: 'critical',
-      pilar: 'Estresse',
-      score: 9,
-      motivo: 'Estresse muito alto (9/10): trabalho + problemas financeiros',
-    },
-    {
-      tipo: 'moderate',
-      pilar: 'Intestino',
-      score: 4,
-      motivo: 'Intestino irregular: fezes ressecadas (Bristol 1-2) + dor abdominal',
-    },
-  ]
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <p className="text-gray-600">Carregando dados do paciente...</p>
+        </div>
+      </div>
+    )
+  }
 
-  const respostas = {
-    motivo: 'Cansaço extremo e dificuldade para dormir',
-    sono_qualidade: 'Durmo muito mal sempre',
-    sono_horas: 'Menos de 6h',
-    sono_atrapalha: 'Ansiedade e preocupações com trabalho',
-    estresse_nivel: '9-10 (muito alto)',
-    estresse_fatores: 'Pressão no trabalho, dívidas financeiras',
-    medicacoes: 'Rivotril 2mg (para dormir)',
-    observacoes: 'Sinto que estou no limite',
+  if (!paciente) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">❌</div>
+          <p className="text-gray-600">Paciente não encontrado</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (submissoes.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center space-x-4">
+              <Link href="/medico" className="text-blue-600 hover:text-blue-800">
+                ← Voltar
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{paciente.name}</h1>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+            <div className="text-4xl mb-4">📋</div>
+            <p className="text-yellow-800 font-medium">
+              Paciente ainda não preencheu o questionário de pré-consulta.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  const scores = submissaoAtual?.scores_json || {}
+  const respostas = submissaoAtual?.answers_json || {}
+
+  const calcularIdade = (birthDate: string) => {
+    const hoje = new Date()
+    const nascimento = new Date(birthDate)
+    let idade = hoje.getFullYear() - nascimento.getFullYear()
+    const mes = hoje.getMonth() - nascimento.getMonth()
+    if (mes < 0 || (mes === 0 && hoje.getDate() < nascimento.getDate())) {
+      idade--
+    }
+    return idade
   }
 
   return (
@@ -70,9 +152,10 @@ export default function PacienteDetalhePage({ params }: { params: { id: string }
                 ← Voltar
               </Link>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{paciente.nome}</h1>
+                <h1 className="text-2xl font-bold text-gray-900">{paciente.name}</h1>
                 <p className="text-sm text-gray-600">
-                  {paciente.idade} anos • {paciente.peso}kg • {paciente.altura}m • Consulta: {paciente.dataConsulta}
+                  {calcularIdade(paciente.birth_date)} anos • 
+                  Última consulta: {new Date(submissaoAtual.submitted_at).toLocaleDateString('pt-BR')}
                 </p>
               </div>
             </div>
@@ -86,15 +169,21 @@ export default function PacienteDetalhePage({ params }: { params: { id: string }
           <h2 className="text-lg font-semibold mb-4">Resumo Executivo</h2>
           <div className="flex items-center space-x-8">
             <div>
-              <span className="text-3xl font-bold text-red-600">2</span>
+              <span className="text-3xl font-bold text-red-600">
+                {alertas.filter(a => a.severity === 'critical').length}
+              </span>
               <p className="text-sm text-gray-600">Áreas Críticas</p>
             </div>
             <div>
-              <span className="text-3xl font-bold text-yellow-600">1</span>
+              <span className="text-3xl font-bold text-yellow-600">
+                {alertas.filter(a => a.severity === 'moderate').length}
+              </span>
               <p className="text-sm text-gray-600">Moderadas</p>
             </div>
             <div>
-              <span className="text-3xl font-bold text-green-600">4</span>
+              <span className="text-3xl font-bold text-green-600">
+                {7 - alertas.length}
+              </span>
               <p className="text-sm text-gray-600">Estáveis</p>
             </div>
           </div>
@@ -104,110 +193,72 @@ export default function PacienteDetalhePage({ params }: { params: { id: string }
           {/* Radar dos 7 Pilares */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Radar - 7 Pilares</h2>
-            <div className="bg-gray-50 rounded-lg p-8 flex items-center justify-center" style={{ minHeight: '300px' }}>
-              <div className="text-center space-y-2">
-                <p className="text-sm text-gray-600">🎯 Gráfico Radar (será implementado)</p>
-                <div className="text-xs text-left space-y-1 mt-4">
-                  <p>💤 Sono: <span className="font-semibold text-red-600">{scores.sono}/10</span></p>
-                  <p>😰 Estresse: <span className="font-semibold text-red-600">{scores.estresse}/10</span></p>
-                  <p>🏃 Atividade Física: <span className="font-semibold text-green-600">{scores.atividadeFisica}/10</span></p>
-                  <p>🥗 Alimentação: <span className="font-semibold text-green-600">{scores.alimentacao}/10</span></p>
-                  <p>🚽 Intestino: <span className="font-semibold text-yellow-600">{scores.intestino}/10</span></p>
-                  <p>⚡ Energia: <span className="font-semibold text-yellow-600">{scores.energia}/10</span></p>
-                  <p>🧬 Hormônios: <span className="font-semibold text-green-600">{scores.hormonios}/10</span></p>
-                </div>
-              </div>
+            <div className="space-y-3">
+              {[
+                { nome: '💤 Sono', valor: scores.sono || 0 },
+                { nome: '😰 Estresse', valor: scores.estresse || 0 },
+                { nome: '🏃 Atividade Física', valor: scores.atividadeFisica || 0 },
+                { nome: '🥗 Alimentação', valor: scores.alimentacao || 0 },
+                { nome: '🚽 Intestino', valor: scores.intestino || 0 },
+                { nome: '⚡ Energia', valor: scores.energia || 0 },
+                { nome: '🧬 Hormônios', valor: scores.hormonios || 0 },
+              ].map((pilar) => {
+                const cor = pilar.valor <= 3 ? 'bg-red-500' : pilar.valor <= 6 ? 'bg-yellow-500' : 'bg-green-500'
+                return (
+                  <div key={pilar.nome}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700">{pilar.nome}</span>
+                      <span className="text-sm font-semibold text-gray-900">{pilar.valor.toFixed(1)}/10</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className={`h-2.5 rounded-full ${cor}`}
+                        style={{ width: `${(pilar.valor / 10) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <button
-              onClick={() => setModoComparacao(!modoComparacao)}
-              className="mt-4 w-full px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
-            >
-              {modoComparacao ? 'Fechar Comparação' : 'Comparar com Consulta Anterior'}
-            </button>
           </div>
 
           {/* Top Alertas */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Top Alertas</h2>
-            <div className="space-y-4">
-              {alertas.map((alerta, index) => (
-                <div 
-                  key={index}
-                  className={`p-4 rounded-lg border-l-4 ${
-                    alerta.tipo === 'critical' 
-                      ? 'bg-red-50 border-red-500' 
-                      : 'bg-yellow-50 border-yellow-500'
-                  }`}
-                >
-                  <div className="flex items-start">
-                    <span className="text-2xl mr-3">
-                      {alerta.tipo === 'critical' ? '🔴' : '🟡'}
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">
-                        {alerta.pilar} ({alerta.score}/10)
-                      </p>
-                      <p className="text-sm text-gray-700 mt-1">
-                        {alerta.motivo}
-                      </p>
+            {alertas.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">
+                ✅ Nenhum alerta crítico ou moderado
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {alertas.slice(0, 5).map((alerta, index) => (
+                  <div 
+                    key={index}
+                    className={`p-4 rounded-lg border-l-4 ${
+                      alerta.severity === 'critical' 
+                        ? 'bg-red-50 border-red-500' 
+                        : 'bg-yellow-50 border-yellow-500'
+                    }`}
+                  >
+                    <div className="flex items-start">
+                      <span className="text-2xl mr-3">
+                        {alerta.severity === 'critical' ? '🔴' : '🟡'}
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900 capitalize">
+                          {alerta.domain}
+                        </p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          {alerta.reason_text}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Comparação (se ativado) */}
-        {modoComparacao && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-semibold mb-4">Comparação (Últimas 2 Consultas)</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-4 text-sm font-medium text-gray-600">Pilar</th>
-                    <th className="text-center py-2 px-4 text-sm font-medium text-gray-600">15/08/2025</th>
-                    <th className="text-center py-2 px-4 text-sm font-medium text-gray-600">15/10/2025</th>
-                    <th className="text-center py-2 px-4 text-sm font-medium text-gray-600">Variação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b">
-                    <td className="py-3 px-4 text-sm">💤 Sono</td>
-                    <td className="py-3 px-4 text-center text-sm">5</td>
-                    <td className="py-3 px-4 text-center text-sm font-semibold text-red-600">3</td>
-                    <td className="py-3 px-4 text-center text-sm text-red-600">📉 -2</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4 text-sm">😰 Estresse</td>
-                    <td className="py-3 px-4 text-center text-sm">6</td>
-                    <td className="py-3 px-4 text-center text-sm font-semibold text-red-600">9</td>
-                    <td className="py-3 px-4 text-center text-sm text-red-600">📈 +3</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4 text-sm">🏃 Atividade Física</td>
-                    <td className="py-3 px-4 text-center text-sm">8</td>
-                    <td className="py-3 px-4 text-center text-sm">7</td>
-                    <td className="py-3 px-4 text-center text-sm text-yellow-600">📉 -1</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-4 text-sm">🥗 Alimentação</td>
-                    <td className="py-3 px-4 text-center text-sm">7</td>
-                    <td className="py-3 px-4 text-center text-sm">8</td>
-                    <td className="py-3 px-4 text-center text-sm text-green-600">📈 +1</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-900">
-                <strong>🔴 Piora crítica:</strong> Sono (-2), Estresse (+3) • 
-                <strong className="ml-2">🟢 Melhora:</strong> Alimentação (+1)
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Respostas Detalhadas */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -215,31 +266,41 @@ export default function PacienteDetalhePage({ params }: { params: { id: string }
           <div className="space-y-4">
             <div>
               <p className="text-sm font-medium text-gray-700">Motivo principal da consulta:</p>
-              <p className="text-gray-900 mt-1">{respostas.motivo}</p>
+              <p className="text-gray-900 mt-1">{respostas.motivo || 'Não informado'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Qualidade do sono:</p>
-              <p className="text-gray-900 mt-1">{respostas.sono_qualidade}</p>
+              <p className="text-gray-900 mt-1">{respostas.sono_qualidade || 'Não informado'}</p>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-700">O que mais atrapalha o sono:</p>
-              <p className="text-gray-900 mt-1">{respostas.sono_atrapalha}</p>
+              <p className="text-sm font-medium text-gray-700">Horas de sono:</p>
+              <p className="text-gray-900 mt-1">{respostas.sono_horas || 'Não informado'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">O que atrapalha o sono:</p>
+              <p className="text-gray-900 mt-1">{respostas.sono_atrapalha || 'Não informado'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Nível de estresse:</p>
-              <p className="text-gray-900 mt-1">{respostas.estresse_nivel}</p>
+              <p className="text-gray-900 mt-1">{respostas.estresse_nivel || 'Não informado'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Fatores de estresse:</p>
-              <p className="text-gray-900 mt-1">{respostas.estresse_fatores}</p>
+              <p className="text-gray-900 mt-1">{respostas.estresse_fatores || 'Não informado'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Peso / Altura:</p>
+              <p className="text-gray-900 mt-1">
+                {respostas.peso || '-'} kg / {respostas.altura || '-'} m
+              </p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Medicações em uso:</p>
-              <p className="text-gray-900 mt-1">{respostas.medicacoes}</p>
+              <p className="text-gray-900 mt-1">{respostas.medicacoes || 'Nenhuma'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">Observações:</p>
-              <p className="text-gray-900 mt-1">{respostas.observacoes}</p>
+              <p className="text-gray-900 mt-1">{respostas.observacoes || 'Nenhuma'}</p>
             </div>
           </div>
         </div>
@@ -254,14 +315,12 @@ export default function PacienteDetalhePage({ params }: { params: { id: string }
             placeholder="Digite sua avaliação clínica, conduta e orientações..."
           />
           <div className="flex justify-end space-x-3 mt-4">
-            <button className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-              Salvar Rascunho
-            </button>
-            <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-              Finalizar Nota
-            </button>
-            <button className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
-              Arquivar Submissão
+            <button 
+              onClick={salvarNota}
+              disabled={salvandoNota}
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {salvandoNota ? 'Salvando...' : 'Salvar Nota'}
             </button>
           </div>
         </div>
