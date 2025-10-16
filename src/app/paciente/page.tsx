@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import TokenValidator from './TokenValidator'
 import { 
-  validateAccessToken, 
   createSubmission, 
   updateSubmission,
   createAlert,
@@ -11,38 +10,20 @@ import {
 } from '@/lib/supabase'
 import { calcularScores, gerarAlertas } from '@/lib/calculos'
 
-export default function PacientePage() {
-  const searchParams = useSearchParams()
-  const token = searchParams.get('token')
-  
+function PacienteContent() {
   const [tokenValido, setTokenValido] = useState<boolean | null>(null)
   const [tokenData, setTokenData] = useState<any>(null)
   const [etapa, setEtapa] = useState(0)
   const [respostas, setRespostas] = useState<any>({})
   const [loading, setLoading] = useState(false)
-  const [submissionId, setSubmissionId] = useState<string | null>(null)
 
-  // Validar token ao carregar
-  useEffect(() => {
-    if (token) {
-      validarToken()
-    } else {
-      setTokenValido(false)
-    }
-  }, [token])
+  const handleValidToken = (data: any) => {
+    setTokenValido(true)
+    setTokenData(data)
+  }
 
-  const validarToken = async () => {
-    try {
-      const data = await validateAccessToken(token!)
-      if (data) {
-        setTokenValido(true)
-        setTokenData(data)
-      } else {
-        setTokenValido(false)
-      }
-    } catch (error) {
-      setTokenValido(false)
-    }
+  const handleInvalidToken = () => {
+    setTokenValido(false)
   }
 
   const handleResposta = (campo: string, valor: any) => {
@@ -65,27 +46,23 @@ export default function PacientePage() {
 
     setLoading(true)
     try {
-      // 1. Calcular scores
       const scores = calcularScores(respostas)
       
-      // 2. Salvar submissão no banco
       const submission = await createSubmission({
         org_id: tokenData.appointments.org_id,
         clinic_id: tokenData.appointments.clinic_id,
-        form_id: '00000000-0000-0000-0000-000000000001', // ID do form padrão
+        form_id: '00000000-0000-0000-0000-000000000001',
         patient_id: tokenData.appointments.patient_id,
         appointment_id: tokenData.appointments.id,
         answers_json: respostas,
         scores_json: scores
       })
 
-      // 3. Marcar como enviado
       await updateSubmission(submission.id, {
         status: 'submitted',
         submitted_at: new Date().toISOString()
       })
 
-      // 4. Gerar alertas
       const alertas = gerarAlertas(respostas, scores)
       for (const alerta of alertas) {
         await createAlert({
@@ -96,12 +73,10 @@ export default function PacientePage() {
         })
       }
 
-      // 5. Revogar token
       await revokeAccessToken(tokenData.id)
 
       alert('✅ Formulário enviado com sucesso!\n\nObrigado por preencher. O médico já pode visualizar suas respostas.')
       
-      // Redirecionar para página de agradecimento
       setEtapa(5)
       
     } catch (error: any) {
@@ -112,7 +87,7 @@ export default function PacientePage() {
     }
   }
 
-  // Token inválido ou expirado
+  // Token inválido
   if (tokenValido === false) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -127,15 +102,13 @@ export default function PacientePage() {
     )
   }
 
-  // Carregando validação
+  // Aguardando validação
   if (tokenValido === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">⏳</div>
-          <p className="text-gray-600">Validando acesso...</p>
-        </div>
-      </div>
+      <TokenValidator 
+        onValidToken={handleValidToken}
+        onInvalidToken={handleInvalidToken}
+      />
     )
   }
 
@@ -157,15 +130,14 @@ export default function PacientePage() {
     )
   }
 
+  // Formulário
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto px-4">
-        {/* Cabeçalho */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Questionário de Pré-Consulta</h1>
           <p className="text-gray-600 mt-2">Preencha com atenção para ajudar seu médico</p>
           
-          {/* Barra de progresso */}
           <div className="mt-4">
             <div className="flex justify-between text-sm text-gray-600 mb-2">
               <span>Progresso</span>
@@ -180,7 +152,6 @@ export default function PacientePage() {
           </div>
         </div>
 
-        {/* Conteúdo das etapas */}
         <div className="bg-white rounded-lg shadow-md p-6">
           {etapa === 0 && (
             <div className="space-y-6">
@@ -448,7 +419,6 @@ export default function PacientePage() {
             </div>
           )}
 
-          {/* Botões de navegação */}
           <div className="flex justify-between mt-8 pt-6 border-t">
             {etapa > 0 && etapa < 5 && (
               <button
@@ -480,5 +450,20 @@ export default function PacientePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function PacientePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    }>
+      <PacienteContent />
+    </Suspense>
   )
 }
