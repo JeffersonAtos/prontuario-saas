@@ -71,3 +71,229 @@ export default function PacientePage() {
               </div>
             </div>
           )}
+
+          {etapa === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">1. SONO</h2>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Como você avalia a qualidade do seu sono?
+                </label>
+                <div className="space-y-2">
+                  {['Durmo muito bem sempre', 'Na maioria das vezes durmo bem', 'Na maioria das vezes durmo mal', 'Durmo muito mal sempre'].map((opcao) => (
+                    <label key={opcao} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="sono_qualidade"
+                        value={opcao}
+                        checked={respostas.sono_qualidade === opcao}
+                        onChange={(e) => handleResposta('sono_qualidade', e.target.value)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-700">{opcao}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantas horas dorme por noite?
+                </label>
+                <div className="space-y-2">
+                  {['Menos de 6h', '6-7h', '7-8h', 'Mais de 8h'].map((opcao) => (
+                    <label key={opcao} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="sono_horas"
+                        value={opcao}
+                        checked={respostas.sono_horas === opcao}
+                        onChange={(e) => handleResposta('sono_horas', e.target.value)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-700">{opcao}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  O que mais atrapalha seu sono?
+                </label>
+                <textarea
+                  value={respostas.sono_atrapalha || ''}
+                  onChange={(e) => handleResposta('sono_atrapalha', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Descreva..."
+                />
+              </div>
+            </div>
+          )}
+
+          {etapa === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">2. ESTRESSE E ANSIEDADE</h2>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seu nível de estresse atual (0 a 10)
+                </label>
+                <div className="space-y-2">
+                  {['0-2 (muito baixo)', '3-4 (baixo)', '5-6 (moderado)', '7-8 (alto)', '9-10 (muito alto)'].map((opcao) => (
+                    <label key={opcao} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="estresse_nivel"
+                        value={opcao}
+                        checked={respostas.estresse_nivel === opcao}
+                        onChange={(e) => handleResposta('estresse_nivel', e.target.value)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-700">{opcao}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Principais fatores de estresse na sua vida
+                </label>
+                <textarea
+                  value={respostas.estresse_fatores || ''}
+                  onChange={(e) => handleResposta('estresse_fatores', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Descreva..."
+                />
+              </div>
+            </div>
+          )}
+
+          {etapa === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">3. DADOS COMPLEMENTARES</h2>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Peso (kg)
+                  </label>
+                  <input
+                    type="number"
+                    value={respostas.peso || ''}
+                    onChange={(e) => handleResposta('peso', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="70"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Altura (m)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={respostas.altura || ''}
+                    onChange={(e) => handleResposta('altura', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="1.75"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Medicações em uso
+                </label>
+                <textarea
+                  value={respostas.medicacoes || ''}
+                  onChange={(e) => handleResposta('medicacoes', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Liste suas medicações..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Observações adicionais
+                </label>
+                <textarea
+                  value={respostas.observacoes || ''}
+                  onChange={(e) => handleResposta('observacoes', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  placeholder="Algo mais que gostaria de compartilhar..."
+                />
+              </div>
+            </div>
+          )}
+
+          {etapa === 4 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">Revisão Final</h2>
+              <p className="text-gray-600">Revise suas respostas antes de enviar</p>
+              
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Motivo da consulta:</p>
+                  <p className="text-gray-900">{respostas.motivo || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Qualidade do sono:</p>
+                  <p className="text-gray-900">{respostas.sono_qualidade || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Nível de estresse:</p>
+                  <p className="text-gray-900">{respostas.estresse_nivel || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Peso/Altura:</p>
+                  <p className="text-gray-900">{respostas.peso || '-'} kg / {respostas.altura || '-'} m</p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Após enviar, você não poderá mais editar suas respostas.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Botões de navegação */}
+          <div className="flex justify-between mt-8 pt-6 border-t">
+            {etapa > 0 && (
+              <button
+                onClick={voltarEtapa}
+                className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Voltar
+              </button>
+            )}
+            
+            {etapa < 4 ? (
+              <button
+                onClick={proximaEtapa}
+                className="ml-auto px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Próximo
+              </button>
+            ) : (
+              <button
+                onClick={enviarFormulario}
+                className="ml-auto px-8 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold"
+              >
+                Enviar Formulário
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
